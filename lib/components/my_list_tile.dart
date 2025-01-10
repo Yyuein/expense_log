@@ -6,38 +6,37 @@ class MyListTile extends StatelessWidget {
   final String trailing;
   final void Function(BuildContext)? onEditPressed;
   final void Function(BuildContext)? onDeletePressed;
-  
   const MyListTile({
     super.key,
     required this.title,
     required this.trailing,
     required this.onDeletePressed,
     required this.onEditPressed,
-    });
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5,horizontal: 25),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 25),
       child: Slidable(
         endActionPane: ActionPane(
-          motion: const StretchMotion(), 
-        children: [
-          SlidableAction(
-            onPressed: onEditPressed,
-            icon: Icons.settings,
-            backgroundColor: Colors.white,
-            foregroundColor: Color.fromARGB(255, 75, 70, 65),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          SlidableAction(
-            onPressed: onDeletePressed,
-            icon: Icons.delete,
-            backgroundColor: Color.fromARGB(255, 180, 137, 125),
-            foregroundColor: Color.fromARGB(255, 75, 70, 65),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ],
+          motion: const StretchMotion(),
+          children: [
+            SlidableAction(
+              onPressed: onEditPressed,
+              icon: Icons.settings,
+              backgroundColor: Colors.white,
+              foregroundColor: Color.fromARGB(255, 75, 70, 65),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            SlidableAction(
+              onPressed: onDeletePressed,
+              icon: Icons.delete,
+              backgroundColor: Color.fromARGB(255, 180, 137, 125),
+              foregroundColor: Color.fromARGB(255, 75, 70, 65),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ],
         ),
         child: Container(
           decoration: BoxDecoration(
@@ -45,8 +44,15 @@ class MyListTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
           ),
           child: ListTile(
-            title: Text(title),
-            trailing: Text(trailing),
+            title: Text(title,
+                style: TextStyle(
+                    color: Color.fromARGB(255, 70, 75, 65),
+                    fontFamily: 'GapSansBold')),
+            trailing: Text("￥${trailing}",
+                style: TextStyle(
+                    color: Color.fromARGB(255, 70, 75, 65),
+                    fontFamily: 'GapSansBold',
+                    fontSize: 15)),
           ),
         ),
       ),
