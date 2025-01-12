@@ -1,15 +1,18 @@
+import 'package:expense_log/helper/helper_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 class MyListTile extends StatelessWidget {
   final String title;
   final String trailing;
+  final DateTime date;
   final void Function(BuildContext)? onEditPressed;
   final void Function(BuildContext)? onDeletePressed;
   const MyListTile({
     super.key,
     required this.title,
     required this.trailing,
+    required this.date,
     required this.onDeletePressed,
     required this.onEditPressed,
   });
@@ -53,6 +56,11 @@ class MyListTile extends StatelessWidget {
                     color: Color.fromARGB(255, 70, 75, 65),
                     fontFamily: 'GapSansBold',
                     fontSize: 15)),
+            subtitle: Text(formatDate(date),
+                style: TextStyle(
+                    color: Color.fromARGB(255, 70, 75, 65),
+                    fontFamily: 'GapSansRegular',
+                    fontSize: 12)),
           ),
         ),
       ),
