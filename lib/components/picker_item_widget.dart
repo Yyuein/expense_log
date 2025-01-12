@@ -29,6 +29,10 @@ class PickerItemWidget extends StatelessWidget {
               backgroundColor: Colors.white,
               foregroundColor: Colors.white,
               activeColor: Color.fromARGB(255, 70, 75, 65),
+              actionButtonTypes: [
+                BoardDateButtonType.yesterday,
+                BoardDateButtonType.today
+              ],
               withSecond: DateTimePickerType.time == pickerType,
               customOptions: DateTimePickerType.time == pickerType
                   ? BoardPickerCustomOptions(
