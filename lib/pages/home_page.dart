@@ -1,10 +1,12 @@
 import 'package:expense_log/bar%20graph/bar_graph.dart';
 import 'package:expense_log/components/my_list_tile.dart';
+import 'package:expense_log/components/picker_item_widget.dart';
 import 'package:expense_log/database/expense_database.dart';
 import 'package:expense_log/helper/helper_functions.dart';
 import 'package:expense_log/models/expense.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:board_datetime_picker/board_datetime_picker.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,11 +19,11 @@ class _HomePageState extends State<HomePage> {
 // text controllers
   TextEditingController nameController = TextEditingController();
   TextEditingController amountController = TextEditingController();
+  ValueNotifier<DateTime> selectedDate = ValueNotifier(DateTime.now());
 
 // futures to load graph data & monthly total
   Future<Map<String, double>>? _monthlyTotalsFuture;
   Future<double>? _calculateCurrentMonthTotal;
-
   @override
   void initState() {
     // read db on initial startup
@@ -29,7 +31,6 @@ class _HomePageState extends State<HomePage> {
 
     // load futures
     refreshData();
-
     super.initState();
   }
 
@@ -44,47 +45,54 @@ class _HomePageState extends State<HomePage> {
 
 // open new expense box
   void openNewExpenseBox() {
+    selectedDate = ValueNotifier(DateTime.now());
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: Text(
-          "New expense",
-          style: TextStyle(
-              color: Color.fromARGB(255, 70, 75, 65),
-              fontFamily: 'GapSansBold'),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(
-                hintText: "Name",
-                hintStyle: TextStyle(
-                  color: Color.fromARGB(255, 150, 159, 168),
-                ),
-              ),
-              style: TextStyle(fontFamily: 'GapSansBold'),
-            ),
-            TextField(
-              controller: amountController,
-              decoration: const InputDecoration(
-                hintText: "Amount",
-                hintStyle: TextStyle(
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          backgroundColor: Colors.white,
+          title: Text(
+            "New expense",
+            style: TextStyle(
+                color: Color.fromARGB(255, 70, 75, 65),
+                fontFamily: 'GapSansBold'),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  hintText: "Name",
+                  hintStyle: TextStyle(
                     color: Color.fromARGB(255, 150, 159, 168),
-                    fontFamily: 'GapSansBold'),
+                  ),
+                ),
+                style: TextStyle(fontFamily: 'GapSansBold'),
               ),
-              style: TextStyle(fontFamily: 'GapSansBold'),
-            ),
+              TextField(
+                controller: amountController,
+                decoration: const InputDecoration(
+                  hintText: "Amount",
+                  hintStyle: TextStyle(
+                      color: Color.fromARGB(255, 150, 159, 168),
+                      fontFamily: 'GapSansBold'),
+                ),
+                style: TextStyle(fontFamily: 'GapSansBold'),
+              ),
+              PickerItemWidget(
+                pickerType: DateTimePickerType.date,
+                date: selectedDate,
+              ),
+            ],
+          ),
+          actions: [
+            // cancel button
+            _cancelButton(),
+            // save button
+            _creatNewExpenseButton()
           ],
         ),
-        actions: [
-          // cancel button
-          _cancelButton(),
-          // save button
-          _creatNewExpenseButton()
-        ],
       ),
     );
   }
@@ -93,6 +101,7 @@ class _HomePageState extends State<HomePage> {
   void openEditBox(Expense expense) {
     String existingName = expense.name;
     String existingAmount = expense.amount.toString();
+    selectedDate = ValueNotifier(expense.date);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -123,6 +132,10 @@ class _HomePageState extends State<HomePage> {
                     color: Color.fromARGB(255, 150, 159, 168),
                     fontFamily: 'GapSansBold'),
               ),
+            ),
+            PickerItemWidget(
+              pickerType: DateTimePickerType.date,
+              date: selectedDate,
             ),
           ],
         ),
@@ -291,6 +304,7 @@ class _HomePageState extends State<HomePage> {
                         return MyListTile(
                           title: individualExpense.name,
                           trailing: formatAmount(individualExpense.amount),
+                          date: individualExpense.date,
                           onEditPressed: (context) =>
                               openEditBox(individualExpense),
                           onDeletePressed: (context) =>
@@ -334,7 +348,7 @@ class _HomePageState extends State<HomePage> {
           Expense newExpense = Expense(
             name: nameController.text,
             amount: convertStringToDouble(amountController.text),
-            date: DateTime.now(),
+            date: selectedDate.value,
           );
 
           await context.read<ExpenseDatabase>().createNewExpense(newExpense);
@@ -358,7 +372,8 @@ class _HomePageState extends State<HomePage> {
     return MaterialButton(
       onPressed: () async {
         if (nameController.text.isNotEmpty ||
-            amountController.text.isNotEmpty) {
+            amountController.text.isNotEmpty ||
+            selectedDate.value != expense.date) {
           Navigator.pop(context);
 
           Expense updatedExpense = Expense(
@@ -368,7 +383,7 @@ class _HomePageState extends State<HomePage> {
               amount: amountController.text.isNotEmpty
                   ? convertStringToDouble(amountController.text)
                   : expense.amount,
-              date: DateTime.now());
+              date: selectedDate.value);
 
           int existingId = expense.id;
 
