@@ -3,23 +3,25 @@ name: github pages
 on:
   push:
     branches: [feature/publish_to_github_pages]
-
   workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pages: read
     steps:
-      - uses: actions/checkout@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
 
       - name: Repository
         id: version
-        run: |
-          REPOSITORY=$(echo ${{ github.repository }} | sed -e "s#.*/##")
-          echo "repository=$REPOSITORY" >> "$GITHUB_OUTPUT"
+        run: echo "repository=${GITHUB_REPOSITORY#*/}" >> "$GITHUB_OUTPUT"
       - name: Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -34,8 +36,43 @@ jobs:
       - run: flutter build web --base-href /${{ steps.version.outputs.repository }}/
       - run: test -s build/web/sqlite3.wasm && test -s build/web/drift_worker.dart.js
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./build/web
+          path: build/web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Verify deployed storage assets
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          base_url="${PAGE_URL%/}/"
+          for asset in drift_worker.dart.js sqlite3.wasm; do
+            curl --fail --silent --show-error --location \
+              --retry 10 --retry-delay 5 --retry-all-errors \
+              --output /dev/null "${base_url}${asset}"
+          done
+          content_type="$(curl --fail --silent --show-error --location \
+            --retry 10 --retry-delay 5 --retry-all-errors \
+            --output /dev/null --write-out '%{content_type}' \
+            "${base_url}sqlite3.wasm")"
+          case "$content_type" in
+            application/wasm*) ;;
+            *) echo "Unexpected WASM content type: $content_type"; exit 1 ;;
+          esac
