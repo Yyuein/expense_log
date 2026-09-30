@@ -2,7 +2,7 @@ import 'package:board_datetime_picker/board_datetime_picker.dart';
 import 'package:flutter/material.dart';
 
 class PickerItemWidget extends StatelessWidget {
-  PickerItemWidget({
+  const PickerItemWidget({
     super.key,
     required this.pickerType,
     required this.date,

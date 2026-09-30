@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:expense_log/bar%20graph/individual_bar.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
@@ -34,32 +36,26 @@ class _MyBarGraphState extends State<MyBarGraph> {
 
   //calculate max for upper limit of graph
   double calculateMax() {
-    double max = 5000;
-
-    widget.monthlySummary.sort();
-
-    max = widget.monthlySummary.last * 1.05;
-
-    if (max < 5000) {
-      return 5000;
-    }
-
-    return max;
+    final largest = widget.monthlySummary.fold<double>(
+      0,
+      (largest, amount) => math.max(largest, amount),
+    );
+    return math.max(5000, largest * 1.05);
   }
 
   // scroll controller to make sure it scrolls to the end / latest month
   final ScrollController _scrollController = ScrollController();
   void scrollToEnd() {
+    if (!_scrollController.hasClients) return;
     _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent, 
-      duration: const Duration(seconds: 1), 
+      _scrollController.position.maxScrollExtent,
+      duration: const Duration(seconds: 1),
       curve: Curves.fastOutSlowIn,
-      );
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-
     // initialize upon build
     initializeBarData();
 
@@ -73,44 +69,55 @@ class _MyBarGraphState extends State<MyBarGraph> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 25.0),
         child: SizedBox(
-          width: barWidth * barData.length + spaceBetweenBars * (barData.length - 1),
+          width: math.max(
+              300,
+              barWidth * barData.length +
+                  spaceBetweenBars * (barData.length - 1)),
           child: BarChart(
             BarChartData(
               minY: 0,
               maxY: calculateMax(),
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
-              titlesData: const FlTitlesData(
+              titlesData: FlTitlesData(
                 show: true,
-                topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                topTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                leftTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                 bottomTitles: AxisTitles(
                   sideTitles: SideTitles(
                     showTitles: true,
-                    getTitlesWidget: getBottomTitles,
+                    getTitlesWidget: (value, meta) => getBottomTitles(
+                      value,
+                      meta,
+                      widget.startMonth,
+                    ),
                     reservedSize: 24,
                   ),
                 ),
               ),
-              barGroups: barData.map(
-                (data) => BarChartGroupData(
-                  x: data.x,
-                  barRods: [
-                    BarChartRodData(
-                      toY: data.y,
-                      width: barWidth,
-                      borderRadius: BorderRadius.circular(4),
-                      color: Color.fromARGB(255, 75, 70, 65),
-                      backDrawRodData: BackgroundBarChartRodData(
-                        show: true,
-                        toY: calculateMax(),
-                        color: Colors.white
-                      ),
-                      ),
-                  ],
-                  ),
-              ).toList(),
+              barGroups: barData
+                  .map(
+                    (data) => BarChartGroupData(
+                      x: data.x,
+                      barRods: [
+                        BarChartRodData(
+                          toY: data.y,
+                          width: barWidth,
+                          borderRadius: BorderRadius.circular(4),
+                          color: Color.fromARGB(255, 75, 70, 65),
+                          backDrawRodData: BackgroundBarChartRodData(
+                              show: true,
+                              toY: calculateMax(),
+                              color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  )
+                  .toList(),
               alignment: BarChartAlignment.center,
               groupsSpace: spaceBetweenBars,
             ),
@@ -119,35 +126,62 @@ class _MyBarGraphState extends State<MyBarGraph> {
       ),
     );
   }
-
 }
 
 // Bottom - Titles
-  Widget getBottomTitles(double value, TitleMeta meta) {
-    const textstyle = TextStyle(
-    color: Color.fromARGB(255, 150, 159, 168),
-    fontWeight: FontWeight.bold,
-    fontSize: 14
-    );
+Widget getBottomTitles(double value, TitleMeta meta, int startMonth) {
+  const textstyle = TextStyle(
+      color: Color.fromARGB(255, 150, 159, 168),
+      fontWeight: FontWeight.bold,
+      fontSize: 14);
 
-    String text;
-    switch(value.toInt() % 12) {
-      case 0: text = "Jan"; break;
-      case 1: text = "Feb"; break;
-      case 2: text = "Mar"; break;
-      case 3: text = "Apr"; break;
-      case 4: text = "May"; break;
-      case 5: text = "Jun"; break;
-      case 6: text = "Jul"; break;
-      case 7: text = "Aug"; break;
-      case 8: text = "Sep"; break;
-      case 9: text = "Oct"; break;
-      case 10: text = "Nov"; break;
-      case 11: text = "Dec"; break;
-      default:
-      text ="";
+  String text;
+  switch ((startMonth - 1 + value.toInt()) % 12) {
+    case 0:
+      text = "Jan";
       break;
-    }
-
-    return SideTitleWidget(child: Text(text, style: textstyle,), axisSide: meta.axisSide);
+    case 1:
+      text = "Feb";
+      break;
+    case 2:
+      text = "Mar";
+      break;
+    case 3:
+      text = "Apr";
+      break;
+    case 4:
+      text = "May";
+      break;
+    case 5:
+      text = "Jun";
+      break;
+    case 6:
+      text = "Jul";
+      break;
+    case 7:
+      text = "Aug";
+      break;
+    case 8:
+      text = "Sep";
+      break;
+    case 9:
+      text = "Oct";
+      break;
+    case 10:
+      text = "Nov";
+      break;
+    case 11:
+      text = "Dec";
+      break;
+    default:
+      text = "";
+      break;
   }
+
+  return SideTitleWidget(
+      axisSide: meta.axisSide,
+      child: Text(
+        text,
+        style: textstyle,
+      ));
+}
