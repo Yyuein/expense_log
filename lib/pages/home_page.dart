@@ -1,3 +1,4 @@
+import 'package:board_datetime_picker/board_datetime_picker.dart';
 import 'package:expense_log/bar%20graph/bar_graph.dart';
 import 'package:expense_log/components/my_list_tile.dart';
 import 'package:expense_log/components/picker_item_widget.dart';
@@ -5,8 +6,8 @@ import 'package:expense_log/database/expense_database.dart';
 import 'package:expense_log/helper/helper_functions.dart';
 import 'package:expense_log/models/expense.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:board_datetime_picker/board_datetime_picker.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,301 +17,172 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-// text controllers
-  TextEditingController nameController = TextEditingController();
-  TextEditingController amountController = TextEditingController();
-  ValueNotifier<DateTime> selectedDate = ValueNotifier(DateTime.now());
+  static const _ink = Color.fromARGB(255, 70, 75, 65);
+  late DateTime _selectedMonth;
 
-// futures to load graph data & monthly total
-  Future<Map<String, double>>? _monthlyTotalsFuture;
-  Future<double>? _calculateCurrentMonthTotal;
   @override
   void initState() {
-    // read db on initial startup
-    Provider.of<ExpenseDatabase>(context, listen: false).readExpenses();
-
-    // load futures
-    refreshData();
     super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
   }
 
-// refresh graph data
-  void refreshData() {
-    _monthlyTotalsFuture = Provider.of<ExpenseDatabase>(context, listen: false)
-        .calculateMonthlyTotals();
-    _calculateCurrentMonthTotal =
-        Provider.of<ExpenseDatabase>(context, listen: false)
-            .calculateCurrentMonthTotal();
-  }
-
-// open new expense box
-  void openNewExpenseBox() {
-    selectedDate = ValueNotifier(DateTime.now());
-    showDialog(
+  Future<void> _showExpenseDialog(BuildContext context,
+      {Expense? expense}) async {
+    final now = DateTime.now();
+    final initialDate = expense?.date ??
+        (_selectedMonth.year == now.year && _selectedMonth.month == now.month
+            ? now
+            : DateTime(_selectedMonth.year, _selectedMonth.month));
+    final savedDate = await showDialog<DateTime>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          backgroundColor: Colors.white,
-          title: Text(
-            "New expense",
-            style: TextStyle(
-                color: Color.fromARGB(255, 70, 75, 65),
-                fontFamily: 'GapSansBold'),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  hintText: "Name",
-                  hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 150, 159, 168),
-                  ),
-                ),
-                style: TextStyle(fontFamily: 'GapSansBold'),
-              ),
-              TextField(
-                controller: amountController,
-                decoration: const InputDecoration(
-                  hintText: "Amount",
-                  hintStyle: TextStyle(
-                      color: Color.fromARGB(255, 150, 159, 168),
-                      fontFamily: 'GapSansBold'),
-                ),
-                style: TextStyle(fontFamily: 'GapSansBold'),
-              ),
-              PickerItemWidget(
-                pickerType: DateTimePickerType.date,
-                date: selectedDate,
-              ),
-            ],
-          ),
-          actions: [
-            // cancel button
-            _cancelButton(),
-            // save button
-            _creatNewExpenseButton()
-          ],
-        ),
-      ),
+      builder: (_) =>
+          _ExpenseEditorDialog(expense: expense, initialDate: initialDate),
     );
+    if (expense == null && savedDate != null && mounted) {
+      setState(
+          () => _selectedMonth = DateTime(savedDate.year, savedDate.month));
+    }
   }
 
-// open edit box
-  void openEditBox(Expense expense) {
-    String existingName = expense.name;
-    String existingAmount = expense.amount.toString();
-    selectedDate = ValueNotifier(expense.date);
-    showDialog(
+  Future<void> _showDeleteDialog(BuildContext context, Expense expense) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          "Edit expense",
-          style: TextStyle(
-              color: Color.fromARGB(255, 70, 75, 65),
-              fontFamily: 'GapSansBold'),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: InputDecoration(
-                hintText: existingName,
-                hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 150, 159, 168),
-                    fontFamily: 'GapSansBold'),
-              ),
-            ),
-            TextField(
-              controller: amountController,
-              decoration: InputDecoration(
-                hintText: existingAmount,
-                hintStyle: TextStyle(
-                    color: Color.fromARGB(255, 150, 159, 168),
-                    fontFamily: 'GapSansBold'),
-              ),
-            ),
-            PickerItemWidget(
-              pickerType: DateTimePickerType.date,
-              date: selectedDate,
-            ),
-          ],
-        ),
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete expense'),
         actions: [
-          // cancel button
-          _cancelButton(),
-          // save button
-          _editExpenseButton(expense),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
         ],
       ),
     );
-  }
-
-// open delete box
-  void openDeleteBox(Expense expense) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.white,
-        title: const Text(
-          "Delete expense",
-          style: TextStyle(
-              color: Color.fromARGB(255, 70, 75, 65),
-              fontFamily: 'GapSansBold'),
-        ),
-        actions: [
-          // cancel button
-          _cancelButton(),
-          // save button
-          _deleteExpenseButton(expense.id),
-        ],
-      ),
-    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      await context.read<ExpenseDatabase>().deleteExpense(expense.id);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('删除失败，请重试'),
+        ));
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<ExpenseDatabase>(
-      builder: (context, value, child) {
-        // get dates
-        int startMonth = value.getStarMonth();
-        int startYear = value.getStarYear();
-        int currentMonth = DateTime.now().month;
-        int currentYear = DateTime.now().year;
+      builder: (context, database, child) {
+        final now = DateTime.now();
+        final firstExpenseMonth = database.startMonth;
+        final start = _selectedMonth.isBefore(firstExpenseMonth)
+            ? _selectedMonth
+            : firstExpenseMonth;
+        final latest = database.allExpense.fold<DateTime>(
+          _selectedMonth.isAfter(now) ? _selectedMonth : now,
+          (date, expense) => expense.date.isAfter(date) ? expense.date : date,
+        );
+        final monthCount = calculateMonthCount(
+          start.year,
+          start.month,
+          latest.year,
+          latest.month,
+        );
+        final totals = database.monthlyTotals;
+        final monthlySummary = List<double>.generate(monthCount, (index) {
+          final year = start.year + (start.month + index - 1) ~/ 12;
+          final month = (start.month + index - 1) % 12 + 1;
+          return totals['$year.$month'] ?? 0.0;
+        });
+        final selectedExpenses = database.allExpense
+            .where((expense) =>
+                expense.date.year == _selectedMonth.year &&
+                expense.date.month == _selectedMonth.month)
+            .toList()
+          ..sort((a, b) => b.date.compareTo(a.date));
+        final selectedTotal =
+            totals['${_selectedMonth.year}.${_selectedMonth.month}'] ?? 0.0;
+        final selectedIndex = calculateMonthCount(start.year, start.month,
+                _selectedMonth.year, _selectedMonth.month) -
+            1;
 
-        //calculate the number of months since the first month
-        int monthCount = calculateMonthCount(
-            startYear, startMonth, currentYear, currentMonth);
-
-        // only display the expenses for the current month
-        List<Expense> currentMonthExpenses = value.allExpense.where((expense) {
-          return expense.date.year == currentYear &&
-              expense.date.month == currentMonth;
-        }).toList();
-
-        // return UI
         return Scaffold(
-          backgroundColor: Color.fromARGB(255, 213, 217, 222),
+          backgroundColor: const Color.fromARGB(255, 213, 217, 222),
           floatingActionButton: FloatingActionButton(
-            backgroundColor: Color.fromARGB(255, 70, 75, 65),
+            backgroundColor: _ink,
             foregroundColor: Colors.white,
-            onPressed: openNewExpenseBox,
-            child: Icon(Icons.add),
+            onPressed: () => _showExpenseDialog(context),
+            child: const Icon(Icons.add),
           ),
           appBar: AppBar(
             backgroundColor: Colors.transparent,
-            title: FutureBuilder<double>(
-                future: _calculateCurrentMonthTotal,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.done) {
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // amount total
-                        Text(
-                          "￥${snapshot.data!.toStringAsFixed(2)}",
-                          style: TextStyle(
-                              color: Color.fromARGB(255, 70, 75, 65),
-                              fontFamily: 'GapSansBold'),
-                        ),
-                        // month
-                        Text(
-                          getCurrentMonthName(),
-                          style: TextStyle(
-                              color: Color.fromARGB(255, 70, 75, 65),
-                              fontFamily: 'GapSansBold'),
-                        ),
-                      ],
-                    );
-                  } else {
-                    return const Text(
-                      "loading...",
-                      style: TextStyle(
-                          color: Color.fromARGB(255, 70, 75, 65),
-                          fontFamily: 'GapSansBold'),
-                    );
-                  }
-                }),
+            title: Text(formatAmount(selectedTotal),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _ink, fontFamily: 'GapSansBold')),
+            actions: [
+              IconButton(
+                key: const Key('previous_month'),
+                tooltip: 'Previous month',
+                onPressed: _selectedMonth.isAfter(start)
+                    ? () => setState(() => _selectedMonth =
+                        DateTime(_selectedMonth.year, _selectedMonth.month - 1))
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Center(
+                child: Text(DateFormat('MMM yyyy').format(_selectedMonth),
+                    style: const TextStyle(
+                        color: _ink, fontFamily: 'GapSansBold')),
+              ),
+              IconButton(
+                key: const Key('next_month'),
+                tooltip: 'Next month',
+                onPressed: DateTime(_selectedMonth.year, _selectedMonth.month)
+                        .isBefore(DateTime(latest.year, latest.month))
+                    ? () => setState(() => _selectedMonth =
+                        DateTime(_selectedMonth.year, _selectedMonth.month + 1))
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
           ),
           body: SafeArea(
             child: Column(
               children: [
-                // graph ui
                 SizedBox(
                   height: 250,
-                  child: FutureBuilder(
-                    future: _monthlyTotalsFuture,
-                    builder: (context, snapshot) {
-                      // data is loaded
-                      if (snapshot.connectionState == ConnectionState.done) {
-                        Map<String, double> monthlyTotals = snapshot.data ?? {};
-
-                        // create the list of monthly summary
-                        List<double> monthlySummary = List.generate(
-                          monthCount,
-                          (index) {
-                            // calculate year-month considering startMonth & index
-                            int year =
-                                startYear + (startMonth + index - 1) ~/ 12;
-                            int month = (startMonth + index - 1) % 12 + 1;
-
-                            // create the key in the format "year-month"
-                            String yearMonthKey =
-                                year.toString() + "." + month.toString();
-
-                            // return the total for year-month or 0.0 if non-existent
-                            return monthlyTotals[yearMonthKey] ?? 0.0;
-                          },
-                        );
-
-                        return MyBarGraph(
-                            monthlySummary: monthlySummary,
-                            startMonth: startMonth);
-                      }
-
-                      // loading..
-                      else {
-                        return const Center(
-                          child: Text(
-                            "loading...",
-                            style: TextStyle(
-                                color: Color.fromARGB(255, 70, 75, 65),
-                                fontFamily: 'GapSansBold'),
-                          ),
-                        );
-                      }
-                    },
+                  child: MyBarGraph(
+                    monthlySummary: monthlySummary,
+                    startMonth: start.month,
+                    selectedIndex: selectedIndex,
+                    onMonthSelected: (index) => setState(() => _selectedMonth =
+                        DateTime(start.year, start.month + index)),
                   ),
                 ),
-
                 const SizedBox(height: 25),
-
-                // expense list ui
                 Expanded(
-                  child: ListView.builder(
-                      itemCount: currentMonthExpenses.length,
-                      itemBuilder: (context, index) {
-                        // reverse the index to show latest item first
-                        int reversedIndex =
-                            currentMonthExpenses.length - 1 - index;
-                        // get individual expense
-                        Expense individualExpense =
-                            currentMonthExpenses[reversedIndex];
-
-                        // return list tile UI
-                        return MyListTile(
-                          title: individualExpense.name,
-                          trailing: formatAmount(individualExpense.amount),
-                          date: individualExpense.date,
-                          onEditPressed: (context) =>
-                              openEditBox(individualExpense),
-                          onDeletePressed: (context) =>
-                              openDeleteBox(individualExpense),
-                        );
-                      }),
+                  child: selectedExpenses.isEmpty
+                      ? const Center(child: Text('No expenses this month'))
+                      : ListView.builder(
+                          itemCount: selectedExpenses.length,
+                          itemBuilder: (context, index) {
+                            final expense = selectedExpenses[index];
+                            return MyListTile(
+                              title: expense.name,
+                              trailing: formatAmount(expense.amount),
+                              date: expense.date,
+                              onEditPressed: (_) =>
+                                  _showExpenseDialog(context, expense: expense),
+                              onDeletePressed: (_) =>
+                                  _showDeleteDialog(context, expense),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
@@ -319,104 +191,105 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
+}
 
-// cancel button
-  Widget _cancelButton() {
-    return MaterialButton(
-      onPressed: () {
-        Navigator.pop(context);
+class _ExpenseEditorDialog extends StatefulWidget {
+  const _ExpenseEditorDialog({this.expense, required this.initialDate});
 
-        nameController.clear();
-        amountController.clear();
-      },
-      child: const Text(
-        "Cancel",
-        style: TextStyle(
-            color: Color.fromARGB(255, 70, 75, 65), fontFamily: 'GapSansBold'),
-      ),
-    );
+  final Expense? expense;
+  final DateTime initialDate;
+
+  @override
+  State<_ExpenseEditorDialog> createState() => _ExpenseEditorDialogState();
+}
+
+class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
+  late final TextEditingController _nameController;
+  late final TextEditingController _amountController;
+  late final ValueNotifier<DateTime> _selectedDate;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.expense?.name);
+    _amountController =
+        TextEditingController(text: widget.expense?.amount.toString());
+    _selectedDate = ValueNotifier(widget.initialDate);
   }
 
-// save button
-  Widget _creatNewExpenseButton() {
-    return MaterialButton(
-      onPressed: () async {
-        if (nameController.text.isNotEmpty &&
-            amountController.text.isNotEmpty) {
-          Navigator.pop(context);
-
-          Expense newExpense = Expense(
-            name: nameController.text,
-            amount: convertStringToDouble(amountController.text),
-            date: selectedDate.value,
-          );
-
-          await context.read<ExpenseDatabase>().createNewExpense(newExpense);
-
-          refreshData();
-
-          nameController.clear();
-          amountController.clear();
-        }
-      },
-      child: const Text(
-        "Save",
-        style: TextStyle(
-            color: Color.fromARGB(255, 70, 75, 65), fontFamily: 'GapSansBold'),
-      ),
-    );
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _amountController.dispose();
+    _selectedDate.dispose();
+    super.dispose();
   }
 
-// save button -> Edit existing expense
-  Widget _editExpenseButton(Expense expense) {
-    return MaterialButton(
-      onPressed: () async {
-        if (nameController.text.isNotEmpty ||
-            amountController.text.isNotEmpty ||
-            selectedDate.value != expense.date) {
-          Navigator.pop(context);
+  Future<void> _save() async {
+    final name = _nameController.text.trim();
+    final amount = double.tryParse(_amountController.text.trim());
+    if (name.isEmpty || amount == null || !amount.isFinite) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('请输入名称和有效金额'),
+      ));
+      return;
+    }
 
-          Expense updatedExpense = Expense(
-              name: nameController.text.isNotEmpty
-                  ? nameController.text
-                  : expense.name,
-              amount: amountController.text.isNotEmpty
-                  ? convertStringToDouble(amountController.text)
-                  : expense.amount,
-              date: selectedDate.value);
-
-          int existingId = expense.id;
-
-          await context
-              .read<ExpenseDatabase>()
-              .updateExpense(existingId, updatedExpense);
-
-          refreshData();
-        }
-      },
-      child: const Text(
-        "Save",
-        style: TextStyle(
-            color: Color.fromARGB(255, 70, 75, 65), fontFamily: 'GapSansBold'),
-      ),
-    );
+    setState(() => _saving = true);
+    try {
+      final entry =
+          Expense(name: name, amount: amount, date: _selectedDate.value);
+      final database = context.read<ExpenseDatabase>();
+      if (widget.expense == null) {
+        await database.createNewExpense(entry);
+      } else {
+        await database.updateExpense(widget.expense!.id, entry);
+      }
+      if (mounted) Navigator.pop(context, entry.date);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('保存失败，请重试'),
+        ));
+        setState(() => _saving = false);
+      }
+    }
   }
 
-// delete button
-  Widget _deleteExpenseButton(int id) {
-    return MaterialButton(
-      onPressed: () async {
-        Navigator.pop(context);
-
-        await context.read<ExpenseDatabase>().deleteExpense(id);
-
-        refreshData();
-      },
-      child: const Text(
-        "Delete",
-        style: TextStyle(
-            color: Color.fromARGB(255, 70, 75, 65), fontFamily: 'GapSansBold'),
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.white,
+      title: Text(widget.expense == null ? 'New expense' : 'Edit expense'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _nameController,
+            decoration: const InputDecoration(hintText: 'Name'),
+          ),
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(hintText: 'Amount'),
+          ),
+          PickerItemWidget(
+            pickerType: DateTimePickerType.date,
+            date: _selectedDate,
+          ),
+        ],
       ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: _saving ? null : _save,
+          child: const Text('Save'),
+        ),
+      ],
     );
   }
 }

@@ -1,103 +1,88 @@
+import 'package:drift/drift.dart';
+import 'package:expense_log/database/app_database.dart';
 import 'package:expense_log/models/expense.dart';
-import 'package:flutter/material.dart';
-import 'package:isar/isar.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 
-class ExpenseDatabase extends ChangeNotifier{
-  static late Isar isar;
-  List<Expense> _allExpenses =[];
+class ExpenseDatabase extends ChangeNotifier {
+  ExpenseDatabase(this._database);
 
-  //SETUP
-  static Future<void> initialize() async{
-    final dir = await getApplicationDocumentsDirectory();
-    isar = await Isar.open([ExpenseSchema], directory: dir.path);
-  }
+  final AppDatabase _database;
+  List<Expense> _allExpenses = [];
 
-  //GETTERS
-  List<Expense> get allExpense=> _allExpenses;
+  List<Expense> get allExpense => List.unmodifiable(_allExpenses);
 
-  //Create
-  Future<void> createNewExpense(Expense newExpense) async{
-    await isar.writeTxn(()=>isar.expenses.put(newExpense));
-    await readExpenses();
-  }
-  //Read
-  Future<void> readExpenses()async{
-    List<Expense> fetchedExpenses = await isar.expenses.where().findAll();
-    _allExpenses.clear();
-    _allExpenses.addAll(fetchedExpenses);
+  Future<void> readExpenses() async {
+    final rows = await _database.select(_database.expenseEntries).get();
+    _allExpenses = rows
+        .map((row) => Expense(
+              id: row.id,
+              name: row.name,
+              amount: row.amount,
+              date: row.date,
+            ))
+        .toList();
     notifyListeners();
   }
-  //Update
-  Future<void> updateExpense(int id, Expense updatedExpense) async{
-    updatedExpense.id =id;
-    await isar.writeTxn(()=>isar.expenses.put(updatedExpense));
+
+  Future<void> createNewExpense(Expense expense) async {
+    await _database.into(_database.expenseEntries).insert(
+          ExpenseEntriesCompanion.insert(
+            name: expense.name,
+            amount: expense.amount,
+            date: expense.date,
+          ),
+        );
     await readExpenses();
   }
-  // Delete
-  Future<void> deleteExpense(int id) async{
-    await isar.writeTxn(()=>isar.expenses.delete(id));
+
+  Future<void> updateExpense(int id, Expense expense) async {
+    await (_database.update(_database.expenseEntries)
+          ..where((row) => row.id.equals(id)))
+        .write(ExpenseEntriesCompanion(
+      name: Value(expense.name),
+      amount: Value(expense.amount),
+      date: Value(expense.date),
+    ));
     await readExpenses();
   }
-  
-  // calculate total expenses for each month
-  Future<Map<String,double>> calculateMonthlyTotals() async{
-    
+
+  Future<void> deleteExpense(int id) async {
+    await (_database.delete(_database.expenseEntries)
+          ..where((row) => row.id.equals(id)))
+        .go();
     await readExpenses();
-
-    Map<String, double> monthlyTotals = {};
-
-      for (var expense in _allExpenses) {
-        String yearMonth = expense.date.year.toString() + "." + expense.date.month.toString();
-
-        if (!monthlyTotals.containsKey(yearMonth)) {
-          monthlyTotals[yearMonth] = 0;
-        }
-        monthlyTotals[yearMonth] = monthlyTotals[yearMonth]! + expense.amount;
-      }
-
-      return monthlyTotals;
   }
 
-  // calculate current month total
-  Future<double> calculateCurrentMonthTotal() async {
-    await readExpenses();
-
-    int currentMonth = DateTime.now().month;
-    int currentYear = DateTime.now().year;
-
-    List<Expense> currentMonthExpenses = _allExpenses.where((expense) {
-      return expense.date.month == currentMonth &&
-      expense.date.year == currentYear;
-      }).toList();
-
-    double total = currentMonthExpenses.fold(0, (sum, expense) => sum + expense.amount);
-    return total;
-  }
-
-  // get start month
-  int getStarMonth() {
-    if (_allExpenses.isEmpty) {
-      return DateTime.now().month;
+  Map<String, double> get monthlyTotals {
+    final totals = <String, double>{};
+    for (final expense in _allExpenses) {
+      final key = '${expense.date.year}.${expense.date.month}';
+      totals.update(key, (value) => value + expense.amount,
+          ifAbsent: () => expense.amount);
     }
-
-    _allExpenses.sort(
-      (a,b) => a.date.compareTo(b.date),
-    );
-
-    return _allExpenses.first.date.month;
+    return totals;
   }
 
-  //get start year
-  int getStarYear() {
+  double get currentMonthTotal {
+    final now = DateTime.now();
+    return _allExpenses
+        .where((expense) =>
+            expense.date.year == now.year && expense.date.month == now.month)
+        .fold(0.0, (sum, expense) => sum + expense.amount);
+  }
+
+  DateTime get startMonth {
     if (_allExpenses.isEmpty) {
-      return DateTime.now().year;
+      final now = DateTime.now();
+      return DateTime(now.year, now.month);
     }
+    final earliest =
+        _allExpenses.reduce((a, b) => a.date.isBefore(b.date) ? a : b);
+    return DateTime(earliest.date.year, earliest.date.month);
+  }
 
-    _allExpenses.sort(
-      (a,b) => a.date.compareTo(b.date),
-    );
-
-    return _allExpenses.first.date.year;
+  Future<void> close() async {
+    await _database.close();
+    dispose();
   }
 }

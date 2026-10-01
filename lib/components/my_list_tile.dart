@@ -3,22 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 
 class MyListTile extends StatelessWidget {
-  final String title;
-  final String trailing;
-  final DateTime date;
-  final void Function(BuildContext)? onEditPressed;
-  final void Function(BuildContext)? onDeletePressed;
   const MyListTile({
     super.key,
     required this.title,
     required this.trailing,
     required this.date,
-    required this.onDeletePressed,
     required this.onEditPressed,
+    required this.onDeletePressed,
   });
+
+  final String title;
+  final String trailing;
+  final DateTime date;
+  final void Function(BuildContext)? onEditPressed;
+  final void Function(BuildContext)? onDeletePressed;
 
   @override
   Widget build(BuildContext context) {
+    const ink = Color.fromARGB(255, 70, 75, 65);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 25),
       child: Slidable(
@@ -29,38 +31,31 @@ class MyListTile extends StatelessWidget {
               onPressed: onEditPressed,
               icon: Icons.settings,
               backgroundColor: Colors.white,
-              foregroundColor: Color.fromARGB(255, 75, 70, 65),
+              foregroundColor: ink,
               borderRadius: BorderRadius.circular(4),
             ),
             SlidableAction(
               onPressed: onDeletePressed,
               icon: Icons.delete,
-              backgroundColor: Color.fromARGB(255, 180, 137, 125),
-              foregroundColor: Color.fromARGB(255, 75, 70, 65),
+              backgroundColor: const Color.fromARGB(255, 180, 137, 125),
+              foregroundColor: ink,
               borderRadius: BorderRadius.circular(4),
             ),
           ],
         ),
         child: Container(
           decoration: BoxDecoration(
-            color: Color.fromARGB(255, 150, 159, 168),
+            color: const Color.fromARGB(255, 150, 159, 168),
             borderRadius: BorderRadius.circular(8),
           ),
           child: ListTile(
             title: Text(title,
-                style: TextStyle(
-                    color: Color.fromARGB(255, 70, 75, 65),
-                    fontFamily: 'GapSansBold')),
-            trailing: Text("￥${trailing}",
-                style: TextStyle(
-                    color: Color.fromARGB(255, 70, 75, 65),
-                    fontFamily: 'GapSansBold',
-                    fontSize: 15)),
+                style: const TextStyle(color: ink, fontFamily: 'GapSansBold')),
+            trailing: Text(trailing,
+                style: const TextStyle(
+                    color: ink, fontFamily: 'GapSansBold', fontSize: 15)),
             subtitle: Text(formatDate(date),
-                style: TextStyle(
-                    color: Color.fromARGB(255, 70, 75, 65),
-                    fontFamily: 'GapSansRegular',
-                    fontSize: 12)),
+                style: const TextStyle(color: ink, fontSize: 12)),
           ),
         ),
       ),
