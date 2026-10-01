@@ -6,18 +6,43 @@ import 'package:expense_log/database/expense_database.dart';
 import 'package:expense_log/helper/helper_functions.dart';
 import 'package:expense_log/models/expense.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
-  static const _ink = Color.fromARGB(255, 70, 75, 65);
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
 
-  Future<void> _showExpenseDialog(BuildContext context, {Expense? expense}) {
-    return showDialog<void>(
+class _HomePageState extends State<HomePage> {
+  static const _ink = Color.fromARGB(255, 70, 75, 65);
+  late DateTime _selectedMonth;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month);
+  }
+
+  Future<void> _showExpenseDialog(BuildContext context,
+      {Expense? expense}) async {
+    final now = DateTime.now();
+    final initialDate = expense?.date ??
+        (_selectedMonth.year == now.year && _selectedMonth.month == now.month
+            ? now
+            : DateTime(_selectedMonth.year, _selectedMonth.month));
+    final savedDate = await showDialog<DateTime>(
       context: context,
-      builder: (_) => _ExpenseEditorDialog(expense: expense),
+      builder: (_) =>
+          _ExpenseEditorDialog(expense: expense, initialDate: initialDate),
     );
+    if (expense == null && savedDate != null && mounted) {
+      setState(
+          () => _selectedMonth = DateTime(savedDate.year, savedDate.month));
+    }
   }
 
   Future<void> _showDeleteDialog(BuildContext context, Expense expense) async {
@@ -54,9 +79,12 @@ class HomePage extends StatelessWidget {
     return Consumer<ExpenseDatabase>(
       builder: (context, database, child) {
         final now = DateTime.now();
-        final start = database.startMonth;
+        final firstExpenseMonth = database.startMonth;
+        final start = _selectedMonth.isBefore(firstExpenseMonth)
+            ? _selectedMonth
+            : firstExpenseMonth;
         final latest = database.allExpense.fold<DateTime>(
-          now,
+          _selectedMonth.isAfter(now) ? _selectedMonth : now,
           (date, expense) => expense.date.isAfter(date) ? expense.date : date,
         );
         final monthCount = calculateMonthCount(
@@ -71,12 +99,17 @@ class HomePage extends StatelessWidget {
           final month = (start.month + index - 1) % 12 + 1;
           return totals['$year.$month'] ?? 0.0;
         });
-        final currentExpenses = database.allExpense
+        final selectedExpenses = database.allExpense
             .where((expense) =>
-                expense.date.year == now.year &&
-                expense.date.month == now.month)
+                expense.date.year == _selectedMonth.year &&
+                expense.date.month == _selectedMonth.month)
             .toList()
           ..sort((a, b) => b.date.compareTo(a.date));
+        final selectedTotal =
+            totals['${_selectedMonth.year}.${_selectedMonth.month}'] ?? 0.0;
+        final selectedIndex = calculateMonthCount(start.year, start.month,
+                _selectedMonth.year, _selectedMonth.month) -
+            1;
 
         return Scaffold(
           backgroundColor: const Color.fromARGB(255, 213, 217, 222),
@@ -88,17 +121,35 @@ class HomePage extends StatelessWidget {
           ),
           appBar: AppBar(
             backgroundColor: Colors.transparent,
-            title: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(formatAmount(database.currentMonthTotal),
+            title: Text(formatAmount(selectedTotal),
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _ink, fontFamily: 'GapSansBold')),
+            actions: [
+              IconButton(
+                key: const Key('previous_month'),
+                tooltip: 'Previous month',
+                onPressed: _selectedMonth.isAfter(start)
+                    ? () => setState(() => _selectedMonth =
+                        DateTime(_selectedMonth.year, _selectedMonth.month - 1))
+                    : null,
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Center(
+                child: Text(DateFormat('MMM yyyy').format(_selectedMonth),
                     style: const TextStyle(
                         color: _ink, fontFamily: 'GapSansBold')),
-                Text(getCurrentMonthName(),
-                    style: const TextStyle(
-                        color: _ink, fontFamily: 'GapSansBold')),
-              ],
-            ),
+              ),
+              IconButton(
+                key: const Key('next_month'),
+                tooltip: 'Next month',
+                onPressed: DateTime(_selectedMonth.year, _selectedMonth.month)
+                        .isBefore(DateTime(latest.year, latest.month))
+                    ? () => setState(() => _selectedMonth =
+                        DateTime(_selectedMonth.year, _selectedMonth.month + 1))
+                    : null,
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
           ),
           body: SafeArea(
             child: Column(
@@ -108,25 +159,30 @@ class HomePage extends StatelessWidget {
                   child: MyBarGraph(
                     monthlySummary: monthlySummary,
                     startMonth: start.month,
+                    selectedIndex: selectedIndex,
+                    onMonthSelected: (index) => setState(() => _selectedMonth =
+                        DateTime(start.year, start.month + index)),
                   ),
                 ),
                 const SizedBox(height: 25),
                 Expanded(
-                  child: ListView.builder(
-                    itemCount: currentExpenses.length,
-                    itemBuilder: (context, index) {
-                      final expense = currentExpenses[index];
-                      return MyListTile(
-                        title: expense.name,
-                        trailing: formatAmount(expense.amount),
-                        date: expense.date,
-                        onEditPressed: (_) =>
-                            _showExpenseDialog(context, expense: expense),
-                        onDeletePressed: (_) =>
-                            _showDeleteDialog(context, expense),
-                      );
-                    },
-                  ),
+                  child: selectedExpenses.isEmpty
+                      ? const Center(child: Text('No expenses this month'))
+                      : ListView.builder(
+                          itemCount: selectedExpenses.length,
+                          itemBuilder: (context, index) {
+                            final expense = selectedExpenses[index];
+                            return MyListTile(
+                              title: expense.name,
+                              trailing: formatAmount(expense.amount),
+                              date: expense.date,
+                              onEditPressed: (_) =>
+                                  _showExpenseDialog(context, expense: expense),
+                              onDeletePressed: (_) =>
+                                  _showDeleteDialog(context, expense),
+                            );
+                          },
+                        ),
                 ),
               ],
             ),
@@ -138,9 +194,10 @@ class HomePage extends StatelessWidget {
 }
 
 class _ExpenseEditorDialog extends StatefulWidget {
-  const _ExpenseEditorDialog({this.expense});
+  const _ExpenseEditorDialog({this.expense, required this.initialDate});
 
   final Expense? expense;
+  final DateTime initialDate;
 
   @override
   State<_ExpenseEditorDialog> createState() => _ExpenseEditorDialogState();
@@ -158,7 +215,7 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
     _nameController = TextEditingController(text: widget.expense?.name);
     _amountController =
         TextEditingController(text: widget.expense?.amount.toString());
-    _selectedDate = ValueNotifier(widget.expense?.date ?? DateTime.now());
+    _selectedDate = ValueNotifier(widget.initialDate);
   }
 
   @override
@@ -189,7 +246,7 @@ class _ExpenseEditorDialogState extends State<_ExpenseEditorDialog> {
       } else {
         await database.updateExpense(widget.expense!.id, entry);
       }
-      if (mounted) Navigator.pop(context);
+      if (mounted) Navigator.pop(context, entry.date);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

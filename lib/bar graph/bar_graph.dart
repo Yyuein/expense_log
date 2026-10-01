@@ -6,9 +6,15 @@ import 'package:flutter/material.dart';
 
 class MyBarGraph extends StatefulWidget {
   final List<double> monthlySummary;
-  final int startMonth; // 0 JAN, 1 FEB, 2 MAR ...
+  final int startMonth;
+  final int selectedIndex;
+  final ValueChanged<int> onMonthSelected;
   const MyBarGraph(
-      {super.key, required this.monthlySummary, required this.startMonth});
+      {super.key,
+      required this.monthlySummary,
+      required this.startMonth,
+      required this.selectedIndex,
+      required this.onMonthSelected});
 
   @override
   State<MyBarGraph> createState() => _MyBarGraphState();
@@ -22,8 +28,19 @@ class _MyBarGraphState extends State<MyBarGraph> {
   void initState() {
     super.initState();
 
-    // we need to scroll to the lastest month automatically
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) => scrollToEnd());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => scrollToSelectedMonth());
+  }
+
+  @override
+  void didUpdateWidget(covariant MyBarGraph oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedIndex != widget.selectedIndex ||
+        oldWidget.startMonth != widget.startMonth ||
+        oldWidget.monthlySummary.length != widget.monthlySummary.length) {
+      WidgetsBinding.instance
+          .addPostFrameCallback((_) => scrollToSelectedMonth());
+    }
   }
 
   // initialize bar data
@@ -43,15 +60,24 @@ class _MyBarGraphState extends State<MyBarGraph> {
     return math.max(5000, largest * 1.05);
   }
 
-  // scroll controller to make sure it scrolls to the end / latest month
   final ScrollController _scrollController = ScrollController();
-  void scrollToEnd() {
-    if (!_scrollController.hasClients) return;
+  void scrollToSelectedMonth() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final position = _scrollController.position;
+    final target =
+        (widget.selectedIndex * 35.0 + 17.5 - position.viewportDimension / 2)
+            .clamp(0.0, position.maxScrollExtent);
     _scrollController.animateTo(
-      _scrollController.position.maxScrollExtent,
-      duration: const Duration(seconds: 1),
+      target,
+      duration: const Duration(milliseconds: 300),
       curve: Curves.fastOutSlowIn,
     );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -77,6 +103,15 @@ class _MyBarGraphState extends State<MyBarGraph> {
             BarChartData(
               minY: 0,
               maxY: calculateMax(),
+              barTouchData: BarTouchData(
+                handleBuiltInTouches: false,
+                allowTouchBarBackDraw: true,
+                touchCallback: (event, response) {
+                  if (event is FlTapUpEvent && response?.spot != null) {
+                    widget.onMonthSelected(response!.spot!.touchedBarGroup.x);
+                  }
+                },
+              ),
               gridData: const FlGridData(show: false),
               borderData: FlBorderData(show: false),
               titlesData: FlTitlesData(
@@ -108,7 +143,9 @@ class _MyBarGraphState extends State<MyBarGraph> {
                           toY: data.y,
                           width: barWidth,
                           borderRadius: BorderRadius.circular(4),
-                          color: Color.fromARGB(255, 75, 70, 65),
+                          color: data.x == widget.selectedIndex
+                              ? const Color.fromARGB(255, 75, 70, 65)
+                              : const Color.fromARGB(255, 150, 159, 168),
                           backDrawRodData: BackgroundBarChartRodData(
                               show: true,
                               toY: calculateMax(),
